@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bid OCR — File Conversion Monitor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        /* ── Header ─────────────────────────────────────────────── */
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: white; padding: 20px 30px; border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;
+        }
+        .header h1 { color: #2c3e50; font-size: 24px; }
+        .header .subtitle { color: #7f8c8d; font-size: 13px; margin-top: 4px; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+
+        /* ── Stats cards ─────────────────────────────────────────── */
+        .stats-row { display: flex; gap: 16px; margin-bottom: 20px; }
+        .stat-card {
+            flex: 1; background: white; border-radius: 8px; padding: 18px 22px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08); border-left: 4px solid #dfe6e9;
+        }
+        .stat-card.total  { border-left-color: #3498db; }
+        .stat-card.done   { border-left-color: #27ae60; }
+        .stat-card.error  { border-left-color: #e74c3c; }
+        .stat-card.pending{ border-left-color: #f39c12; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #2c3e50; }
+        .stat-label { font-size: 12px; color: #7f8c8d; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* ── Toolbar ─────────────────────────────────────────────── */
+        .toolbar {
+            background: white; border-radius: 8px; padding: 14px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 16px;
+            display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+        }
+        .toolbar-sep { flex: 1; }
+
+        /* ── Buttons ─────────────────────────────────────────────── */
+        .btn {
+            padding: 8px 16px; border-radius: 6px; border: none; font-size: 13px;
+            font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .btn-primary  { background: #3498db; color: white; }
+        .btn-primary:hover  { background: #2c80c8; }
+        .btn-success  { background: #27ae60; color: white; }
+        .btn-success:hover  { background: #1e8449; }
+        .btn-warning  { background: #f39c12; color: white; }
+        .btn-warning:hover  { background: #d68910; }
+        .btn-danger   { background: #e74c3c; color: white; }
+        .btn-danger:hover   { background: #c0392b; }
+        .btn-light    { background: #ecf0f1; color: #34495e; border: 1px solid #dfe6e9; }
+        .btn-light:hover    { background: #dde4e6; }
+        .btn:disabled { opacity: 0.6; cursor: default; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        /* ── Filter inputs ───────────────────────────────────────── */
+        .filter-input, .filter-select {
+            padding: 8px 12px; border: 1px solid #dfe6e9; border-radius: 6px;
+            font-size: 13px; color: #34495e; background: #fafbfc;
+        }
+        .filter-input { min-width: 220px; }
+        .filter-input:focus, .filter-select:focus {
+            outline: none; border-color: #3498db; background: white;
+        }
+
+        /* ── Table ───────────────────────────────────────────────── */
+        .table-card {
+            background: white; border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08); overflow: hidden;
+        }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead th {
+            background: #f0f4f8; color: #34495e; font-weight: 700;
+            padding: 10px 14px; text-align: left; border-bottom: 2px solid #dfe6e9;
+            white-space: nowrap;
+        }
+        tbody td { padding: 9px 14px; border-bottom: 1px solid #f0f4f8; color: #2c3e50; vertical-align: middle; }
+        tbody tr:hover td { background: #f8fbff; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        .col-num   { width: 42px; color: #95a5a6; }
+        .col-key   { max-width: 320px; }
+        .col-key span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 12px; }
+        .col-target { max-width: 260px; }
+        .col-target span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 12px; color: #27ae60; }
+        .col-date  { white-space: nowrap; font-size: 12px; color: #7f8c8d; }
+        .col-err   { max-width: 200px; font-size: 11px; color: #e74c3c; }
+        .col-err span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .col-actions { white-space: nowrap; }
+
+        /* ── Status badge ────────────────────────────────────────── */
+        .badge {
+            display: inline-block; padding: 3px 10px; border-radius: 999px;
+            font-size: 11px; font-weight: 700;
+        }
+        .badge-done    { background: #d5f5e3; color: #1e8449; }
+        .badge-error   { background: #fadbd8; color: #c0392b; }
+        .badge-pending { background: #fef9e7; color: #b7950b; }
+
+        /* ── Pagination ──────────────────────────────────────────── */
+        .pagination {
+            display: flex; justify-content: flex-end; align-items: center;
+            gap: 6px; padding: 12px 16px; border-top: 1px solid #f0f4f8;
+            font-size: 12px; color: #7f8c8d;
+        }
+        .page-btn {
+            padding: 4px 10px; border-radius: 4px; border: 1px solid #dfe6e9;
+            background: white; color: #34495e; cursor: pointer; font-size: 12px;
+        }
+        .page-btn:hover { background: #f0f4f8; }
+        .page-btn.active { background: #3498db; color: white; border-color: #3498db; }
+        .page-btn:disabled { background: #ecf0f1; color: #bdc3c7; cursor: default; }
+
+        /* ── Run status bar ──────────────────────────────────────── */
+        #runStatus {
+            font-size: 13px; padding: 8px 14px; border-radius: 6px;
+            display: none; margin-bottom: 12px;
+        }
+        #runStatus.info  { background: #eaf4fd; color: #2471a3; display: block; }
+        #runStatus.ok    { background: #d5f5e3; color: #1e8449; display: block; }
+        #runStatus.err   { background: #fadbd8; color: #c0392b; display: block; }
+
+        /* ── Modal ───────────────────────────────────────────────── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: white; border-radius: 10px;
+            width: 960px; max-width: 96vw; max-height: 90vh;
+            display: flex; flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 20px; border-bottom: 1px solid #dfe6e9; gap: 12px;
+        }
+        .modal-header h3 { font-size: 14px; color: #2c3e50; font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .modal-close {
+            background: none; border: none; font-size: 20px; cursor: pointer;
+            color: #7f8c8d; line-height: 1; flex-shrink: 0;
+        }
+        .modal-close:hover { color: #2c3e50; }
+        .modal-body { flex: 1; overflow: auto; }
+
+        /* View toggle */
+        .view-toggle { display: flex; gap: 0; border: 1px solid #dfe6e9; border-radius: 6px; overflow: hidden; flex-shrink: 0; }
+        .view-toggle button {
+            padding: 5px 12px; font-size: 12px; font-weight: 600; border: none; cursor: pointer;
+            background: white; color: #7f8c8d; transition: all 0.15s;
+        }
+        .view-toggle button.active { background: #3498db; color: white; }
+        .view-toggle button:hover:not(.active) { background: #f0f4f8; color: #34495e; }
+
+        /* Raw view */
+        #previewRaw {
+            display: none; padding: 20px; margin: 0; white-space: pre-wrap; word-break: break-word;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 12.5px; line-height: 1.65; color: #2c3e50; background: #f8f9fa;
+            min-height: 100%;
+        }
+
+        /* Rendered markdown */
+        .md-body {
+            padding: 28px 36px; line-height: 1.7; color: #2c3e50; font-size: 14px;
+        }
+        .md-body h1 { font-size: 22px; font-weight: 700; color: #1a252f; margin: 0 0 16px; padding-bottom: 10px; border-bottom: 2px solid #dfe6e9; }
+        .md-body h2 { font-size: 17px; font-weight: 700; color: #2c3e50; margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #eaecee; }
+        .md-body h3 { font-size: 14px; font-weight: 700; color: #34495e; margin: 20px 0 8px; }
+        .md-body p  { margin: 0 0 12px; }
+        .md-body ul, .md-body ol { padding-left: 24px; margin: 0 0 12px; }
+        .md-body li { margin-bottom: 4px; }
+        .md-body hr { border: none; border-top: 1px solid #dfe6e9; margin: 20px 0; }
+        .md-body code {
+            background: #f0f4f8; border: 1px solid #dfe6e9; border-radius: 4px;
+            padding: 1px 5px; font-family: 'Cascadia Code','Fira Code',monospace; font-size: 12px;
+        }
+        .md-body pre {
+            background: #1e2130; border-radius: 6px; padding: 16px 18px; margin: 12px 0;
+            overflow-x: auto;
+        }
+        .md-body pre code {
+            background: none; border: none; padding: 0; color: #cdd6f4;
+            font-size: 12.5px; line-height: 1.6;
+        }
+        /* Markdown tables */
+        .md-body table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+        .md-body thead th {
+            background: #f0f4f8; color: #34495e; font-weight: 700;
+            padding: 8px 12px; text-align: left; border: 1px solid #dfe6e9;
+        }
+        .md-body tbody td { padding: 7px 12px; border: 1px solid #dfe6e9; vertical-align: top; }
+        .md-body tbody tr:nth-child(even) td { background: #f8fbff; }
+        .md-body strong { font-weight: 700; }
+        .md-body em { font-style: italic; }
+        .md-body blockquote {
+            border-left: 4px solid #3498db; margin: 12px 0; padding: 8px 16px;
+            background: #eaf4fd; color: #2471a3; border-radius: 0 4px 4px 0;
+        }
+
+        .modal-footer {
+            padding: 12px 20px; border-top: 1px solid #dfe6e9;
+            display: flex; justify-content: flex-end; gap: 8px;
+        }
+
+        /* ── Empty state ─────────────────────────────────────────── */
+        .empty { padding: 40px; text-align: center; color: #95a5a6; font-size: 14px; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- Header -->
+    <div class="header">
+        <div>
+            <h1>Bid OCR — File Conversion Monitor</h1>
+            <div class="subtitle">Cron: <code><%= cron %></code> &nbsp;·&nbsp; Converts bid files (PDF/DOCX/XLSX/ZIP/RAR) to Markdown</div>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+        <div class="stat-card total">
+            <div class="stat-value" id="statTotal"><%= stats.total %></div>
+            <div class="stat-label">Total Files</div>
+        </div>
+        <div class="stat-card done">
+            <div class="stat-value" id="statDone"><%= stats.done %></div>
+            <div class="stat-label">Converted</div>
+        </div>
+        <div class="stat-card pending">
+            <div class="stat-value" id="statPending"><%= stats.pending %></div>
+            <div class="stat-label">Pending</div>
+        </div>
+        <div class="stat-card error">
+            <div class="stat-value" id="statError"><%= stats.error %></div>
+            <div class="stat-label">Errors</div>
+        </div>
+    </div>
+
+    <!-- Run status message -->
+    <div id="runStatus"></div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <input type="text" class="filter-input" id="searchInput" placeholder="Search by file path…">
+        <select class="filter-select" id="statusFilter">
+            <option value="">All statuses</option>
+            <option value="done">Done</option>
+            <option value="pending">Pending</option>
+            <option value="error">Error</option>
+        </select>
+        <button class="btn btn-light" onclick="loadRecords(1)">Search</button>
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-light" id="refreshBtn" onclick="refresh()">↻ Refresh</button>
+        <button class="btn btn-warning" id="retryBtn" onclick="retryErrors()">Retry Errors</button>
+        <button class="btn btn-success" id="runBtn" onclick="runNow()">▶ Run OCR Now</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-card">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-num">#</th>
+                        <th>Source File</th>
+                        <th>Status</th>
+                        <th>Output (.md)</th>
+                        <th>Processed At</th>
+                        <th>Error</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="recordsTbody">
+                    <tr><td colspan="7" class="empty">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+    </div>
+
+</div>
+
+<!-- Markdown preview modal -->
+<div class="modal-overlay" id="previewModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="previewTitle">OCR Output</h3>
+            <div class="view-toggle">
+                <button id="toggleRendered" class="active" onclick="setView('rendered')">Rendered</button>
+                <button id="toggleRaw" onclick="setView('raw')">Raw</button>
+            </div>
+            <button class="modal-close" onclick="closePreview()">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="previewContent" class="md-body">Loading…</div>
+            <pre id="previewRaw"></pre>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-light btn-sm" id="copyBtn" onclick="copyRaw()">Copy</button>
+            <button class="btn btn-light btn-sm" onclick="closePreview()">Close</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script>
+    // Configure marked: enable tables, break on newlines
+    marked.use({ gfm: true, breaks: false });
+
+    let currentPage = 1;
+    const PAGE_SIZE = 50;
+    let rawMarkdown = '';
+
+    function fmtDate(iso) {
+        if (!iso) return '—';
+        return new Date(iso).toLocaleString('vi-VN', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false
+        });
+    }
+
+    function esc(s) {
+        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function statusBadge(status) {
+        const cls = { done: 'badge-done', error: 'badge-error', pending: 'badge-pending' }[status] || 'badge-pending';
+        return `<span class="badge ${cls}">${status}</span>`;
+    }
+
+    async function loadRecords(page) {
+        currentPage = page || 1;
+        const q      = document.getElementById('searchInput').value.trim();
+        const status = document.getElementById('statusFilter').value;
+        const params = new URLSearchParams({ page: currentPage, limit: PAGE_SIZE });
+        if (q)      params.set('q', q);
+        if (status) params.set('status', status);
+
+        const tbody = document.getElementById('recordsTbody');
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
+
+        try {
+            const data = await fetch('/api/records?' + params).then(r => r.json());
+            renderTable(data.records, data.total, data.totalPages);
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="7" class="empty" style="color:#e74c3c">Error: ${esc(e.message)}</td></tr>`;
+        }
+    }
+
+    function renderTable(records, total, totalPages) {
+        const tbody = document.getElementById('recordsTbody');
+        if (!records.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="empty">No records found.</td></tr>';
+            document.getElementById('pagination').innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML = records.map((r, i) => {
+            const num     = (currentPage - 1) * PAGE_SIZE + i + 1;
+            const keyName = r.objectKey.split('/').pop();
+            const canView = r.status === 'done' && r.targetKey;
+            return `<tr>
+                <td class="col-num">${num}</td>
+                <td class="col-key" title="${esc(r.objectKey)}"><span>${esc(r.objectKey)}</span></td>
+                <td>${statusBadge(r.status)}</td>
+                <td class="col-target" title="${esc(r.targetKey || '')}">
+                    <span>${r.targetKey ? esc(r.targetKey) : '<span style="color:#bdc3c7">—</span>'}</span>
+                </td>
+                <td class="col-date">${fmtDate(r.processedAt)}</td>
+                <td class="col-err" title="${esc(r.error || '')}">
+                    <span>${r.error ? esc(r.error) : ''}</span>
+                </td>
+                <td class="col-actions">
+                    ${canView ? `<button class="btn btn-primary btn-sm" onclick="viewContent('${r._id}','${esc(keyName)}')">View</button> ` : ''}
+                    <button class="btn btn-danger btn-sm" onclick="deleteRecord('${r._id}')">Re-queue</button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        renderPagination(total, totalPages);
+    }
+
+    function renderPagination(total, totalPages) {
+        const el = document.getElementById('pagination');
+        if (totalPages <= 1) { el.innerHTML = `<span>${total} records</span>`; return; }
+        let html = `<span>${total} records &nbsp;·&nbsp; Page ${currentPage} / ${totalPages}</span>`;
+        html += `<button class="page-btn" onclick="loadRecords(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>‹</button>`;
+        const start = Math.max(1, currentPage - 2), end = Math.min(totalPages, currentPage + 2);
+        for (let p = start; p <= end; p++)
+            html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="loadRecords(${p})">${p}</button>`;
+        html += `<button class="page-btn" onclick="loadRecords(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>›</button>`;
+        el.innerHTML = html;
+    }
+
+    async function deleteRecord(id) {
+        if (!confirm('Remove this record so the file gets reprocessed on next run?')) return;
+        try {
+            await fetch('/api/records/' + id, { method: 'DELETE' });
+            await loadRecords(currentPage);
+            await refreshStats();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function runNow() {
+        const btn = document.getElementById('runBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Running…';
+        showStatus('OCR scan started — check back in a few minutes.', 'info');
+        try {
+            await fetch('/api/run', { method: 'POST' });
+        } catch (e) {
+            showStatus('Error: ' + e.message, 'err');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '▶ Run OCR Now';
+        }
+    }
+
+    async function retryErrors() {
+        if (!confirm('Delete all error records so they re-run on the next scan?')) return;
+        const btn = document.getElementById('retryBtn');
+        btn.disabled = true;
+        try {
+            const data = await fetch('/api/retry-errors', { method: 'POST' }).then(r => r.json());
+            showStatus(`Cleared ${data.deleted} error record(s). They will be retried on the next run.`, 'ok');
+            await loadRecords(1);
+            await refreshStats();
+        } catch (e) {
+            showStatus('Error: ' + e.message, 'err');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function refresh() {
+        await Promise.all([loadRecords(currentPage), refreshStats()]);
+    }
+
+    async function refreshStats() {
+        try {
+            const s = await fetch('/api/stats').then(r => r.json());
+            document.getElementById('statTotal').textContent   = s.total;
+            document.getElementById('statDone').textContent    = s.done;
+            document.getElementById('statPending').textContent = s.pending;
+            document.getElementById('statError').textContent   = s.error;
+        } catch (_) {}
+    }
+
+    function showStatus(msg, type) {
+        const el = document.getElementById('runStatus');
+        el.className = type;
+        el.textContent = msg;
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => { el.className = ''; }, 8000);
+    }
+
+    // ── Preview modal ──────────────────────────────────────────────
+    let currentView = 'rendered';
+
+    function setView(mode) {
+        currentView = mode;
+        document.getElementById('previewContent').style.display = mode === 'rendered' ? '' : 'none';
+        document.getElementById('previewRaw').style.display     = mode === 'raw'      ? '' : 'none';
+        document.getElementById('toggleRendered').classList.toggle('active', mode === 'rendered');
+        document.getElementById('toggleRaw').classList.toggle('active',      mode === 'raw');
+    }
+
+    async function viewContent(id, filename) {
+        document.getElementById('previewTitle').textContent = filename;
+        document.getElementById('previewContent').innerHTML = '<span style="color:#7f8c8d">Loading…</span>';
+        document.getElementById('previewRaw').textContent = '';
+        document.getElementById('previewModal').classList.add('open');
+        setView('rendered');
+        rawMarkdown = '';
+        try {
+            const text = await fetch('/api/records/' + id + '/content').then(r => {
+                if (!r.ok) return r.json().then(d => Promise.reject(new Error(d.error)));
+                return r.text();
+            });
+            rawMarkdown = text;
+            document.getElementById('previewContent').innerHTML = marked.parse(text);
+            document.getElementById('previewRaw').textContent = text;
+        } catch (e) {
+            document.getElementById('previewContent').innerHTML = `<span style="color:#e74c3c">Error: ${esc(e.message)}</span>`;
+        }
+    }
+
+    function closePreview() {
+        document.getElementById('previewModal').classList.remove('open');
+    }
+
+    function copyRaw() {
+        if (!rawMarkdown) return;
+        navigator.clipboard.writeText(rawMarkdown).then(() => {
+            const btn = document.getElementById('copyBtn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        });
+    }
+
+    document.getElementById('previewModal').addEventListener('click', function(e) {
+        if (e.target === this) closePreview();
+    });
+
+    document.getElementById('searchInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') loadRecords(1);
+    });
+
+    document.getElementById('statusFilter').addEventListener('change', () => loadRecords(1));
+
+    // Initial load
+    loadRecords(1);
+</script>
+</body>
+</html>
