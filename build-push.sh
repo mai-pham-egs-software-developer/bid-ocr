@@ -6,7 +6,7 @@ set -euo pipefail
 # Usage: ./build-push.sh [OPTIONS]
 #   -u  Docker registry username
 #   -p  Docker registry password
-#   -r  Repository name  (e.g. myuser/bid-gateway)
+#   -r  Repository name  (e.g. <username>/bid-ocr)
 #   -t  Tag              (optional; auto-increments patch from latest remote tag)
 # ---------------------------------------------------------------------------
 
@@ -41,7 +41,9 @@ if [[ -z "$PASSWORD" ]]; then
   echo
 fi
 if [[ -z "$REPO" ]]; then
-  read -rp "Repository name (e.g. myuser/bid-ocr): " REPO
+  DEFAULT_REPO="${USERNAME}/bid-ocr"
+  read -rp "Repository name [${DEFAULT_REPO}]: " REPO
+  REPO="${REPO:-$DEFAULT_REPO}"
 fi
 
 # ---------------------------------------------------------------------------
