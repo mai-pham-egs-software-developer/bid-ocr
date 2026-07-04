@@ -13,8 +13,9 @@ app.use(express.json());
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-const PORT = process.env.PORT || 3001;
-const OCR_CRON = process.env.OCR_CRON || '30 2 * * *';
+const PORT      = process.env.PORT      || 3001;
+const OCR_CRON  = process.env.OCR_CRON  || '30 2 * * *';
+const BASE_PATH = process.env.BASE_PATH || '';
 
 // ── Admin UI ──────────────────────────────────────────────────────
 app.get('/', async (req, res) => {
@@ -25,7 +26,7 @@ app.get('/', async (req, res) => {
             OcrRecord.countDocuments({ status: 'error' }),
             OcrRecord.countDocuments({ status: 'pending' }),
         ]);
-        res.render('index', { stats: { total, done, error, pending }, cron: OCR_CRON });
+        res.render('index', { stats: { total, done, error, pending }, cron: OCR_CRON, basePath: BASE_PATH });
     } catch (e) {
         res.status(500).send(e.message);
     }

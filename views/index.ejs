@@ -314,6 +314,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script>
+    const BASE = '<%- basePath %>';
+
     // Configure marked: enable tables, break on newlines
     marked.use({ gfm: true, breaks: false });
 
@@ -350,7 +352,7 @@
         tbody.innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
 
         try {
-            const data = await fetch('/api/records?' + params).then(r => r.json());
+            const data = await fetch(BASE + '/api/records?' + params).then(r => r.json());
             renderTable(data.records, data.total, data.totalPages);
         } catch (e) {
             tbody.innerHTML = `<tr><td colspan="7" class="empty" style="color:#e74c3c">Error: ${esc(e.message)}</td></tr>`;
@@ -405,7 +407,7 @@
     async function deleteRecord(id) {
         if (!confirm('Remove this record so the file gets reprocessed on next run?')) return;
         try {
-            await fetch('/api/records/' + id, { method: 'DELETE' });
+            await fetch(BASE + '/api/records/' + id, { method: 'DELETE' });
             await loadRecords(currentPage);
             await refreshStats();
         } catch (e) {
@@ -419,7 +421,7 @@
         btn.textContent = '⏳ Running…';
         showStatus('OCR scan started — check back in a few minutes.', 'info');
         try {
-            await fetch('/api/run', { method: 'POST' });
+            await fetch(BASE + '/api/run', { method: 'POST' });
         } catch (e) {
             showStatus('Error: ' + e.message, 'err');
         } finally {
@@ -433,7 +435,7 @@
         const btn = document.getElementById('retryBtn');
         btn.disabled = true;
         try {
-            const data = await fetch('/api/retry-errors', { method: 'POST' }).then(r => r.json());
+            const data = await fetch(BASE + '/api/retry-errors', { method: 'POST' }).then(r => r.json());
             showStatus(`Cleared ${data.deleted} error record(s). They will be retried on the next run.`, 'ok');
             await loadRecords(1);
             await refreshStats();
@@ -450,7 +452,7 @@
 
     async function refreshStats() {
         try {
-            const s = await fetch('/api/stats').then(r => r.json());
+            const s = await fetch(BASE + '/api/stats').then(r => r.json());
             document.getElementById('statTotal').textContent   = s.total;
             document.getElementById('statDone').textContent    = s.done;
             document.getElementById('statPending').textContent = s.pending;
@@ -485,7 +487,7 @@
         setView('rendered');
         rawMarkdown = '';
         try {
-            const text = await fetch('/api/records/' + id + '/content').then(r => {
+            const text = await fetch(BASE + '/api/records/' + id + '/content').then(r => {
                 if (!r.ok) return r.json().then(d => Promise.reject(new Error(d.error)));
                 return r.text();
             });
