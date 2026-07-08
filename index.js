@@ -2,7 +2,6 @@ require('dotenv').config();
 
 const path = require('path');
 const express = require('express');
-const schedule = require('node-schedule');
 const { connectMongo } = require('./mongo');
 const { minioClient, OCR_BUCKET, ensureBuckets, streamToBuffer } = require('./minio');
 const { scanAndConvert } = require('./pipeline');
@@ -14,7 +13,6 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 const PORT      = process.env.PORT      || 3001;
-const OCR_CRON  = process.env.OCR_CRON  || '30 2 * * *';
 const BASE_PATH = process.env.BASE_PATH || '';
 
 // ── Admin UI ──────────────────────────────────────────────────────
@@ -26,14 +24,14 @@ app.get('/', async (req, res) => {
             OcrRecord.countDocuments({ status: 'error' }),
             OcrRecord.countDocuments({ status: 'pending' }),
         ]);
-        res.render('index', { stats: { total, done, error, pending }, cron: OCR_CRON, basePath: BASE_PATH });
+        res.render('index', { stats: { total, done, error, pending }, basePath: BASE_PATH });
     } catch (e) {
         res.status(500).send(e.message);
     }
 });
 
 // ── API ───────────────────────────────────────────────────────────
-app.get('/api/status', (req, res) => res.json({ status: 'ok', cron: OCR_CRON }));
+app.get('/api/status', (req, res) => res.json({ status: 'ok' }));
 
 app.get('/api/stats', async (req, res) => {
     try {
@@ -49,10 +47,15 @@ app.get('/api/stats', async (req, res) => {
     }
 });
 
-// Manual trigger — returns immediately, runs in background
+// Manual/orchestrated trigger — runs synchronously and returns the result summary
 app.post('/api/run', async (req, res) => {
-    res.json({ message: 'OCR scan started' });
-    scanAndConvert().catch(e => console.error('[ocr] Run error:', e.message));
+    try {
+        const summary = await scanAndConvert();
+        res.json(summary);
+    } catch (e) {
+        console.error('[ocr] Run error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // List records with optional filtering + search
@@ -112,14 +115,8 @@ async function start() {
     await connectMongo();
     await ensureBuckets();
 
-    schedule.scheduleJob(OCR_CRON, () => {
-        console.log('[ocr] Scheduled scan starting...');
-        scanAndConvert().catch(e => console.error('[ocr] Scheduled scan error:', e.message));
-    });
-
     app.listen(PORT, () => {
         console.log(`[ocr] Server running on port ${PORT}`);
-        console.log(`[ocr] Cron: ${OCR_CRON}`);
     });
 }
 
